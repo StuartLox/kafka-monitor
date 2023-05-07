@@ -1,0 +1,206 @@
+
+def configDocDir = "${buildDir}/configDocs"
+
+apply plugin: 'maven-publish'
+apply plugin: 'distribution'
+
+
+allprojects {
+  apply plugin: 'idea'
+  apply plugin: 'eclipse'
+  apply plugin: 'java'
+  apply plugin: 'checkstyle'
+
+  sourceCompatibility = 8
+  targetCompatibility = 8
+
+  group = 'com.linkedin.kmf'
+
+  repositories {
+    mavenCentral()
+    maven {
+      url  "https://linkedin.jfrog.io/artifactory/avro-util/"
+    }
+  }
+
+  dependencies {
+    compile 'net.sourceforge.argparse4j:argparse4j:0.5.0'
+    compile 'org.apache.logging.log4j:log4j-slf4j-impl:2.17.1'
+    compile 'org.apache.commons:commons-lang3:3.12.0'
+    compile 'org.apache.avro:avro:1.11.0'
+    compile 'org.json:json:20140107'
+    compile 'org.jolokia:jolokia-jvm:1.6.2'
+    compile 'net.savantly:graphite-client:1.1.0-RELEASE'
+    compile 'com.timgroup:java-statsd-client:3.0.1'
+    compile 'com.signalfx.public:signalfx-codahale:0.0.47'
+    compile group: 'org.apache.kafka', name: 'kafka_2.13', version: '3.4.0'
+    compile group: 'org.apache.kafka', name: 'kafka-clients', version: '3.4.0'
+    compile 'com.linkedin.avroutil1:helper-all:0.2.118'
+    testCompile 'org.mockito:mockito-core:2.24.0'
+    testCompile 'org.testng:testng:6.8.8'
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from(configurations.testRuntime) {
+      include('slf4j-log4j12*')
+    }
+    from(configurations.runtime) {}
+    into "build/dependant-libs"
+    duplicatesStrategy 'exclude'
+  }
+
+  jar {
+    doFirst {
+      manifest {
+        // embed version information into jar manifests
+        attributes('Name': "${project.name}",
+            'Specification-Title': "${project.name}",
+            'Specification-Version': "${project.version}",
+            'Specification-Vendor': "LinkedIn",
+            'Implementation-Title': "${project.name}",
+            'Implementation-Version': "${project.version}",
+            'Implementation-Vendor': "LinkedIn")
+      }
+    }
+
+    dependsOn 'copyDependantLibs'
+  }
+
+  task sourceJar(type: Jar) {
+    from sourceSets.main.allJava
+    classifier "sources"
+  }
+
+  task javadocJar(type: Jar) {
+    from javadoc
+    classifier = 'javadoc'
+  }
+
+  task testJar(type: Jar) {
+    from sourceSets.test.allJava
+    classifier = 'tests'
+  }
+
+  publishing {
+    publications {
+      MyPublication(MavenPublication) {
+        groupId project.group
+        artifactId project.name
+        version project.version
+
+        from components.java
+        artifact sourceJar
+        artifact javadocJar
+        artifact testJar
+        artifact distZip
+        artifact distTar
+
+        pom {
+          name = 'kafka-monitor'
+          description = 'kafka monitor'
+          url = 'https://github.com/linkedin/kafka-monitor'
+
+          licenses {
+            license {
+              name = 'The Apache Software License, Version 2.0'
+              url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+            }
+          }
+          scm {
+            connection = 'scm:git:git://github.com:linkedin/kafka-monitor.git'
+            developerConnection = 'scm:git:ssh://github.com:linkedin/kafka-monitor.git'
+            url = 'https://github.com/linkedin/kafka-monitor'
+          }
+        }
+
+        repositories {
+          mavenLocal()
+          maven {
+            name "LinkedInJfrog"
+            url "https://linkedin.jfrog.io/artifactory/kafka-monitor"
+            credentials {
+              if (System.getenv('JFROG_USER') != null && System.getenv('JFROG_KEY') != null) {
+                username System.getenv('JFROG_USER')
+                password System.getenv('JFROG_KEY')
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  artifacts {
+    archives testJar
+  }
+
+  checkstyle {
+    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+    configProperties = ["suppressionFile": new File(rootDir, "checkstyle/suppressions.xml")]
+  }
+
+  task createConfigDocs( dependsOn : compileJava, type : JavaExec) {
+    outputs.dir configDocDir
+    classpath sourceSets.main.runtimeClasspath
+    main = 'com.linkedin.xinfra.monitor.common.ConfigDocumentationGenerator'
+    args = [configDocDir,
+            'com.linkedin.xinfra.monitor.services.configs.ConsumeServiceConfig',
+            'com.linkedin.xinfra.monitor.services.configs.DefaultMetricsReporterServiceConfig',
+            'com.linkedin.xinfra.monitor.services.configs.JettyServiceConfig',
+            'com.linkedin.xinfra.monitor.services.configs.ProduceServiceConfig',
+            'com.linkedin.xinfra.monitor.services.configs.TopicManagementServiceConfig',
+            'com.linkedin.xinfra.monitor.apps.configs.MultiClusterMonitorConfig']
+  }
+
+  build.dependsOn createConfigDocs
+
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
+
+  test {
+    useTestNG()
+
+    testLogging {
+      events "passed", "skipped", "failed"
+      exceptionFormat = 'full'
+    }
+  }
+
+  distributions {
+    main {
+      contents {
+        into('bin') {
+          from 'bin'
+        }
+        into('build/libs') {
+          from jar
+        }
+        into('build/dependant-libs') {
+          from copyDependantLibs
+        }
+        into('config') {
+          from 'config'
+        }
+        into('build/configDocs') {
+          from createConfigDocs
+        }
+        into('webapp') {
+          from 'webapp'
+        }
+        from('.') {
+          include 'README.md'
+        }
+      }
+    }
+  }
+  tasks.withType(Tar){
+    compression = Compression.GZIP
+    extension = 'tar.gz'
+  }
+
+}
+
+wrapper {
+  gradleVersion = '5.2.1'
+  distributionType = Wrapper.DistributionType.ALL
+
+}

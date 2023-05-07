@@ -1,0 +1,16 @@
+.gradle/
+.DS_Store
+build/
+logs/
+.classpath
+.idea/
+.project
+.settings/
+src/test/java/com/linkedin/xinfra/monitor/RandomTests.java
+
+config/andrew-choi.properties
+config/andrew-multi-cluster-monitor.properties
+
+kafka-monitor.iml
+kafka-monitor.ipr
+kafka-monitor.iws
