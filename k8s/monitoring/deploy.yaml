@@ -9,6 +9,44 @@ spec:
       app: kafka-monitor
   template:
     metadata:
+      annotations:
+        prometheus.io/port: "9273"
+        prometheus.io/scrape: "true"
+        telegraf.influxdata.com/inputs: |+
+          [[inputs.jolokia2_agent]]
+            urls = ["http://localhost:8778/jolokia/"]
+          
+          [[inputs.jolokia2_agent.metric]]
+            name  = "java_lang_GarbageCollector"
+            mbean = "java.lang:name=*,type=GarbageCollector"
+            paths = ["CollectionCount", "CollectionTime", "LastGcInfo"]
+            tag_keys = ["name"]
+
+          [[inputs.jolokia2_agent.metric]]
+            name  = "kmf_produce"
+            mbean = "kmf.services:name=*,type=produce-service"
+            paths = ["records-produced-total", "records-produced-rate", "records-produced-total"]
+            tag_keys = ["name"]
+          
+          [[inputs.jolokia2_agent.metric]]
+            name  = "kmf_consume"
+            mbean = "kmf.services:name=*,type=consume-service"
+            paths = ["topic-partitions-count", "consume-availability-avg", "records-consumed-total", "records-delay-ms-avg", "consume-error-rate"]
+            tag_keys = ["name"]
+          
+          [[inputs.jolokia2_agent.metric]]
+            name  = "kmf_commit_availability"
+            mbean = "kmf.services:name=*,type=commit-availability-service"
+            paths = ["offsets-committed-avg", "failed-commit-offsets-total", "failed-commit-offsets-avg"]
+            tag_keys = ["name"]
+
+          [[inputs.jolokia2_agent.metric]]
+            name  = "kmf_commit_latency"
+            mbean = "kmf.services:name=*,type=commit-latency-service"
+            paths = ["commit-offset-latency-ms-avg","commit-offset-latency-ms-99th", "commit-offset-latency-ms-999th", "commit-offset-latency-ms-9999th"]
+            tag_keys = ["name"]
+
+        telegraf.influxdata.com/class: prometheus
       labels:
         app: kafka-monitor
     spec:
@@ -16,4 +54,23 @@ spec:
         - name: kafka-monitor
           image: quay.io/samsung_cnct/kafka-monitor:0.1
           ports:
-            - containerPort: 8778
+            - containerPort: 9273
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-monitor
+  labels:
+    app: kafka-monitor
+  annotations:
+    prometheus.io/port: "9273"
+    prometheus.io/scrape: "true"
+spec:
+  selector:
+    app: kafka-monitor
+  ports:
+    - name: monitor-prometheus
+      protocol: TCP
+      port: 9273
+      targetPort: 9273
+  type: ClusterIP

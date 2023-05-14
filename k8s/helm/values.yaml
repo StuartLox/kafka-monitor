@@ -1,0 +1,17 @@
+## Configure telegraf-operator
+## ref: https://github.com/influxdata/helm-charts/blob/master/charts/telegraf-operator/values.yaml
+telegraf-operator:
+  enabled: true
+  image:
+    sidecarImage: telegraf:1.26.2
+  replicaCount: 1
+  classes:
+    secretName: "telegraf-operator-classes"
+    default: "prometheus"
+    data:
+      prometheus: |
+        [[outputs.prometheus_client]]
+          ## Configuration details:
+          ## https://github.com/influxdata/telegraf/tree/master/plugins/outputs/prometheus_client#configuration
+          listen = ":9273"
+          metric_version = 2

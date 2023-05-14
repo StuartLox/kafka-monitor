@@ -11,3 +11,17 @@ spec:
   selector:
     matchLabels:
       type: kafka
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    release: demo-test
+  name: kafka-monitor
+spec:
+  endpoints:
+    - interval: 30s
+      port: monitor-prometheus
+  selector:
+    matchLabels:
+      app: kafka-monitor

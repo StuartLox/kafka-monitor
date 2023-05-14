@@ -1,0 +1,6 @@
+dependencies:
+- name: telegraf-operator
+  repository: https://helm.influxdata.com/
+  version: 1.3.10
+digest: sha256:ef889c4f8cf4f7e1caad35054421bb7fde8071d30df9ea91f53cd4c72ddd56e8
+generated: "2023-05-13T21:06:14.774493+08:00"
